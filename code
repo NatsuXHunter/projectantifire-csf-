@@ -1,7 +1,7 @@
 #include <Wire.h>
 #include "SHTSensor.h" // http://librarymanager/All#arduino_shtc3
 #include <FastLED.h> // http://librarymanager/All#FASTLED
-
+#include "LowPower.h"
 
 
 #define LED_PIN     4
@@ -9,9 +9,9 @@
 #define BRIGHTNESS  64
 #define LED_TYPE    WS2811
 #define COLOR_ORDER GRB
+#define DATA_PIN 4
 CRGB leds[NUM_LEDS];
-CRGBPalette16 currentPalette;
-TBlendType    currentBlending;
+int lum = 21;
 
 #define UPDATES_PER_SECOND 100
 
@@ -22,10 +22,8 @@ void setup() {
   Wire.begin();
   sht.init();
   sht.setAccuracy(SHTSensor::SHT_ACCURACY_MEDIUM); // only supported by SHT3x
-
-
   Serial.println("Temperature:,Humidity:");   // Plot labels
-
+  FastLED.addLeds<WS2812, DATA_PIN, RGB>(leds, NUM_LEDS);
 }
 
 
@@ -34,20 +32,10 @@ void loop() {
     Serial.print(sht.getTemperature());
     Serial.print(F(" "));
     Serial.println(sht.getHumidity());
-    
-
-
-uint8_t temp = map(sht.getTemperature(), 20,35,170,0); // Map value from luminosity sensor to LED
-
- // FastLED's built-in rainbow generator
-  fill_solid( leds, NUM_LEDS, ColorFromPalette(RainbowColors_p,temp,BRIGHTNESS, LINEARBLEND));
-
-
-  
-  
-// send the 'leds' array out to the actual LED strip
-  FastLED.show();
-  FastLED.delay(1000 / UPDATES_PER_SECOND);
-    
+    leds[0] = CRGB(lum,0,0);
+    leds[1] = CRGB(0,lum,0);
+    leds[2] = CRGB(0,lum,lum);
+    FastLED.show();
     delay(1000);
 }
+
