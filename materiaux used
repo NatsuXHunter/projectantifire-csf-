@@ -18,3 +18,5 @@ Pour le systeme de pompe pour présurer l'eau nous avons pensé à 3 systèmes :
 - Une pompe directement que l'on mettra en route que lorsque l'on détecte un feu (plus couteux mais plus fiable)
 - Une système de piston à la taille de la cuve qui poussera l'eau de la cuve vers l'extémité du tuyau ( pas encore tester mais en theorie peux marcher)
 - une système de "chateau d'eau", donc une cuve remplie et fermer par un bras connecté à un servo moteur qui laissera passer l'eau dans le tuyau ou dans une deuxième cuve elle meme connecter au tuyau 
+
+Vidéo inspiration: https://www.youtube.com/shorts/5FDDDqz8MAM
