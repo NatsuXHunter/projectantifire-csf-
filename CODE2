@@ -1,0 +1,122 @@
+#include "DHT.h"
+#include <SPI.h>
+#include <SD.h>
+
+// On ESP32, do NOT use SoftwareSerial if possible. 
+// Use the hardware serial ports.
+#define PM_SERIAL_RX 18 // Connect PM Sensor TX to ESP32 Pin 16
+#define PM_SERIAL_TX 17 // Connect PM Sensor RX to ESP32 Pin 17
+
+#define DHTPIN 4     
+#define DHTTYPE DHT22   
+DHT dht(DHTPIN, DHTTYPE);
+
+const int chipSelect = 10;
+
+// PM Sensor Variables
+#define LENG 31 
+unsigned char buf[LENG];
+
+// Averaging Variables
+float sumTemp = 0, sumHum = 0;
+long sumPM01 = 0, sumPM25 = 0, sumPM10 = 0;
+int sampleCount = 0;
+
+int PM01Value = 0, PM2_5Value = 0, PM10Value = 0;
+unsigned long previousMillis = 0;
+unsigned long logPreviousMillis = 0;
+const long intervalle = 2000;      
+const long logInterval = 60000;    
+
+void setup() {
+  Serial.begin(115200); // Standard speed for ESP32
+  
+  // Initialize Hardware Serial 2 for the PM Sensor
+  Serial2.begin(9600, SERIAL_8N1, PM_SERIAL_RX, PM_SERIAL_TX);
+  
+  dht.begin();
+  
+  Serial.print("Initialisation SD Card... ");
+  if (!SD.begin(chipSelect)) {
+    Serial.println("Échec !");
+  } else {
+    Serial.println("Succès.");
+    File dataFile = SD.open("/datalog.csv", FILE_APPEND); // Use / for ESP32
+    if (dataFile) {
+      if (dataFile.size() == 0) {
+        dataFile.println("Time(ms),Temp(C),Hum(%),PM1.0,PM2.5,PM10");
+      }
+      dataFile.close();
+    }
+  }
+  Serial.println("Système prêt.");
+}
+
+void loop() {
+  // 1. Listen to PM Sensor (using Serial2)
+  if (Serial2.find(0x42)) {    
+    Serial2.readBytes(buf, LENG);
+    if (buf[0] == 0x4d) {
+      if (checkValue(buf, LENG)) {
+        PM01Value  = transmitPM01(buf);
+        PM2_5Value = transmitPM2_5(buf);
+        PM10Value  = transmitPM10(buf);
+      }           
+    }
+  }
+
+  unsigned long currentMillis = millis();
+  
+  if (currentMillis - previousMillis >= intervalle) {
+    previousMillis = currentMillis;
+    float h = dht.readHumidity();
+    float t = dht.readTemperature();
+
+    if (!isnan(h) && !isnan(t)) {
+      sumTemp += t;
+      sumHum += h;
+      sumPM01 += PM01Value;
+      sumPM25 += PM2_5Value;
+      sumPM10 += PM10Value;
+      sampleCount++;
+      Serial.print("Echantillon collecté #"); Serial.println(sampleCount);
+    }
+  }
+
+  if (currentMillis - logPreviousMillis >= logInterval) {
+    logPreviousMillis = currentMillis;
+
+    if (sampleCount > 0) {
+      float avgT = sumTemp / sampleCount;
+      float avgH = sumHum / sampleCount;
+      float avgPM01 = (float)sumPM01 / sampleCount;
+      float avgPM25 = (float)sumPM25 / sampleCount;
+      float avgPM10 = (float)sumPM10 / sampleCount;
+
+      File dataFile = SD.open("/datalog.csv", FILE_APPEND);
+      if (dataFile) {
+        dataFile.printf("%lu,%.2f,%.2f,%.1f,%.1f,%.1f\n", 
+                        currentMillis, avgT, avgH, avgPM01, avgPM25, avgPM10);
+        dataFile.close();
+        Serial.println(">> Moyenne enregistrée sur SD <<");
+      } else {
+        Serial.println("Erreur SD");
+      }
+
+      // Reset
+      sumTemp = 0; sumHum = 0; sumPM01 = 0; sumPM25 = 0; sumPM10 = 0;
+      sampleCount = 0;
+    }
+  }
+}
+
+// Checksum and Transmission functions stay the same...
+char checkValue(unsigned char *thebuf, char leng) {  
+  int receiveSum = 0;
+  for (int i = 0; i < (leng - 2); i++) receiveSum += thebuf[i];
+  receiveSum += 0x42;
+  return (receiveSum == ((thebuf[leng - 2] << 8) + thebuf[leng - 1]));
+}
+int transmitPM01(unsigned char *thebuf) { return ((thebuf[3] << 8) + thebuf[4]); }
+int transmitPM2_5(unsigned char *thebuf) { return ((thebuf[5] << 8) + thebuf[6]); }
+int transmitPM10(unsigned char *thebuf) { return ((thebuf[7] << 8) + thebuf[8]); }
