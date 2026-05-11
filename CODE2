@@ -1,30 +1,34 @@
 // --- Configuration des broches ---
-const int pinCapteur = 2; // Broche numérique connectée au DO du KY-026
+const int pinCapteurNum = 4;   // Connectée au DO (Digital Out) du KY-026
+const int pinCapteurAna = 34;  // Connectée au AO (Analog Out) du KY-026 (Broche sûre en lecture seule)
 
 // --- Configuration des variables de temps (Non bloquant) ---
-unsigned long tempsPrecedentFlamme = 0; // Pour espacer les messages d'alerte
-const unsigned long intervalleFlamme = 300; // 300 millisecondes
+unsigned long tempsPrecedentFlamme = 0; 
+const unsigned long intervalleFlamme = 300; // 300 ms
 
-unsigned long tempsPrecedentAucune = 0; // Pour espacer les messages de repos
-const unsigned long intervalleAucune = 5000; // 5000 millisecondes = 5 secondes
+unsigned long tempsPrecedentAucune = 0; 
+const unsigned long intervalleAucune = 5000; // 5 secondes
 
 // --- Paramètre du capteur ---
-// Le KY-026 passe à l'état BAS (LOW) lorsqu'il détecte une flamme.
 const int ETAT_FLAMME_ACTIVE = LOW; 
 
 void setup() {
-  // Initialisation de la communication série à 9600 bauds
   Serial.begin(9600);
   
-  // Configuration de la broche du capteur en entrée
-  pinMode(pinCapteur, INPUT);
+  pinMode(pinCapteurNum, INPUT);
+  // Sur ESP32, la configuration pinMode pour analogRead n'est pas strictement nécessaire, 
+  // mais c'est une bonne pratique de s'assurer que la broche lit bien les données.
   
   Serial.println("Initialisation du capteur KY-026 terminée.");
 }
 
 void loop() {
-  // Lecture de l'état actuel du capteur
-  int etatCapteur = digitalRead(pinCapteur);
+  // Lecture de l'état numérique (flamme oui/non)
+  int etatCapteur = digitalRead(pinCapteurNum);
+  
+  // Lecture de la valeur analogique (intensité de la flamme / rayonnement IR)
+  // Sur un ESP32, cette valeur va de 0 à 4095.
+  int intensiteIR = analogRead(pinCapteurAna);
   
   // Récupération du temps actuel
   unsigned long tempsActuel = millis();
@@ -32,23 +36,22 @@ void loop() {
   // 1. Condition : Si une flamme est détectée
   if (etatCapteur == ETAT_FLAMME_ACTIVE) {
     
-    // Remplacement du delay(300) par millis() pour ne pas bloquer la carte
     if (tempsActuel - tempsPrecedentFlamme >= intervalleFlamme) {
-      Serial.println("Flamme détectée !");
+      Serial.print(" Flamme détectée ! Intensité thermique (IR) : ");
+      Serial.println(intensiteIR);
+      
       tempsPrecedentFlamme = tempsActuel;
     }
     
-    // On maintient le chronomètre d'absence de flamme à zéro
-    // tant que la flamme est présente.
     tempsPrecedentAucune = tempsActuel; 
   } 
   // 2. Condition : Si aucune flamme n'est détectée
   else {
     
-    // On vérifie si le délai de 5 secondes de sécurité s'est écoulé
     if (tempsActuel - tempsPrecedentAucune >= intervalleAucune) {
-      Serial.println("Aucune flamme détectée.");
-      // Mise à jour du temps précédent pour le prochain message
+      Serial.print(" Aucune flamme détectée. Niveau infrarouge ambiant : ");
+      Serial.println(intensiteIR);
+      
       tempsPrecedentAucune = tempsActuel;
     }
   }
