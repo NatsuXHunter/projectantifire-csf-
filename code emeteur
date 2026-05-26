@@ -11,11 +11,17 @@ const int irqPin = 6;
 const int pinDigital = 3; 
 const int pinAnalog = A3; 
 
+// Chrono du moteur (Balayage continu)
 unsigned long dernierTempsMouvement = 0;
 const unsigned long intervalleMouvement = 100; 
 
+// Chrono de l'Alerte Feu (Cooldown de 3 secondes anti-spam)
+unsigned long dernierTempsFeu = 0;
+const unsigned long intervalleAlerteFeu = 3000; 
+
+// Chrono du RAS (Toutes les 20 secondes)
 unsigned long dernierTempsLoRaRefresh = 0;
-const unsigned long intervalleLoRaRefresh = 20000; // 20 secondes pour le RAS
+const unsigned long intervalleLoRaRefresh = 20000; 
 
 int angle = 0;
 int direction = 5; 
@@ -32,29 +38,22 @@ void setup() {
     Serial.println("Échec LoRa !");
     while (1);
   }
-  Serial.println("Émetteur prêt.");
+  Serial.println("Émetteur prêt. Algorithme anti-spam activé.");
 }
 
 void loop() {
-  int valDigital = digitalRead(pinDigital);
+  // LECTURE DU CAPTEUR (Pour ton test, commente la ligne ci-dessous et mets valDigital à 0)
+  int valDigital = digitalRead(pinDigital); 
+  // int valDigital = 0; 
   int valAnalog = analogRead(pinAnalog);
 
-  // 1. Affichage PERMANENT sur le moniteur série local de l'émetteur
+  // 1. MOUVEMENT ET AFFICHAGE LOCAL (Tourne en permanence sans aucun délai)
   if (millis() - dernierTempsMouvement >= intervalleMouvement) {
-    Serial.print("Analogique: "); Serial.print(valAnalog);
-    Serial.print(" | Numérique: "); Serial.print(valDigital);
-    Serial.print(" | Angle Servo: "); Serial.println(angle);
-
     myservo.write(angle);
     
-    // 2. ENVOI LORA IMMÉDIAT SI FLAMME DÉTECTÉE (valDigital tombe à 0)
-    if (valDigital == LOW) {
-      LoRa.beginPacket();
-      LoRa.print("FEU,");
-      LoRa.print(angle);
-      LoRa.endPacket();
-      delay(500); // Anti-rebond pour ne pas saturer la radio pendant le feu
-    }
+    Serial.print("Analogique: "); Serial.print(valAnalog);
+    Serial.print(" | Numérique: "); Serial.print(valDigital);
+    Serial.print(" | Angle: "); Serial.println(angle);
 
     angle += direction;
     if (angle >= 180 || angle <= 0) {
@@ -63,13 +62,29 @@ void loop() {
     dernierTempsMouvement = millis();
   }
 
-  // 3. ENVOI LORA TOUTES LES 20 SECONDES (RAS)
-  if (millis() - dernierTempsLoRaRefresh >= intervalleLoRaRefresh) {
-    LoRa.beginPacket();
-    LoRa.print("RAS,");
-    LoRa.print(angle);
-    LoRa.endPacket();
-    
-    dernierTempsLoRaRefresh = millis();
+  // 2. GESTION DU FEU (Envoi LoRa avec Cooldown de 3 secondes)
+  if (valDigital == LOW) {
+    if (millis() - dernierTempsFeu >= intervalleAlerteFeu) {
+      LoRa.beginPacket();
+      LoRa.print("FEU,");
+      LoRa.print(angle);
+      LoRa.endPacket();
+      
+      dernierTempsFeu = millis();
+      // On remet le chrono du RAS à zéro pour éviter d'envoyer un RAS en plein incendie
+      dernierTempsLoRaRefresh = millis(); 
+    }
+  }
+
+  // 3. GESTION DU RAS (Envoi LoRa toutes les 20 secondes si tout va bien)
+  if (valDigital == HIGH) {
+    if (millis() - dernierTempsLoRaRefresh >= intervalleLoRaRefresh) {
+      LoRa.beginPacket();
+      LoRa.print("RAS,");
+      LoRa.print(angle);
+      LoRa.endPacket();
+      
+      dernierTempsLoRaRefresh = millis();
+    }
   }
 }
