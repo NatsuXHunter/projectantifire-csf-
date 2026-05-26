@@ -4,7 +4,6 @@
 
 Servo servoRecepteur;
 
-// Broches LoRa pour la carte UCA21
 const int csPin = 10;
 const int resetPin = 8;
 const int irqPin = 6;
@@ -13,36 +12,42 @@ void setup() {
   Serial.begin(115200);
   while (!Serial);
 
-  servoRecepteur.attach(A2); // Branche ton 2ème servo sur A2 (et V_bus / GND)
+  servoRecepteur.attach(A2);
 
-  // Initialisation LoRa
   LoRa.setPins(csPin, resetPin, irqPin);
   if (!LoRa.begin(868E6)) {
     Serial.println("Échec LoRa sur le récepteur !");
     while (1);
   }
-  Serial.println("Récepteur prêt. En attente d'une détection...");
+  Serial.println("Récepteur prêt. À l'écoute du réseau...");
 }
 
 void loop() {
-  // On vérifie si un paquet LoRa est arrivé
   int packetSize = LoRa.parsePacket();
   
   if (packetSize) {
     String messageRecu = "";
-    
-    // On lit le message caractère par caractère pour reconstituer l'angle
     while (LoRa.available()) {
       messageRecu += (char)LoRa.read();
     }
 
-    // On convertit le texte reçu en nombre entier (int)
-    int angleCible = messageRecu.toInt();
-    
-    Serial.print("Détection signalée par l'émetteur ! Calibrage à l'angle : ");
-    Serial.println(angleCible);
-
-    // On positionne le servomoteur au même endroit
-    servoRecepteur.write(angleCible);
+    // ANALYSE DU MESSAGE REÇU
+    if (messageRecu == "RAS ça marche") {
+      // C'est le message de statut des 30 secondes
+      Serial.print("[Statut Émetteur] : ");
+      Serial.println(messageRecu);
+    } 
+    else {
+      // Ce n'est pas le texte de statut, c'est donc un angle (chiffre)
+      int angleCible = messageRecu.toInt();
+      
+      // Sécurité : on vérifie que la conversion a donné un angle valide
+      if (angleCible >= 0 && angleCible <= 180) {
+        Serial.print("Alerte reçu ! Alignement du servo sur l'angle : ");
+        Serial.println(angleCible);
+        
+        servoRecepteur.write(angleCible);
+      }
+    }
   }
 }
