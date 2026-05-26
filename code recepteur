@@ -8,6 +8,11 @@ const int csPin = 10;
 const int resetPin = 8;
 const int irqPin = 6;
 
+unsigned long dernierRefresh = 0;
+const unsigned long intervalleRefresh = 20000; // 20 secondes
+
+int angleCourant = 0;
+
 void setup() {
   Serial.begin(115200);
   while (!Serial);
@@ -16,13 +21,14 @@ void setup() {
 
   LoRa.setPins(csPin, resetPin, irqPin);
   if (!LoRa.begin(868E6)) {
-    Serial.println("Échec LoRa sur le récepteur !");
+    Serial.println("Échec de l'initialisation LoRa !");
     while (1);
   }
-  Serial.println("Récepteur prêt. À l'écoute du réseau...");
+  Serial.println("Récepteur actif. En attente de synchronisation...");
 }
 
 void loop() {
+  // Vérification de la réception d'un paquet LoRa
   int packetSize = LoRa.parsePacket();
   
   if (packetSize) {
@@ -31,23 +37,57 @@ void loop() {
       messageRecu += (char)LoRa.read();
     }
 
-    // ANALYSE DU MESSAGE REÇU
-    if (messageRecu == "RAS ça marche") {
-      // C'est le message de statut des 30 secondes
-      Serial.print("[Statut Émetteur] : ");
-      Serial.println(messageRecu);
-    } 
-    else {
-      // Ce n'est pas le texte de statut, c'est donc un angle (chiffre)
-      int angleCible = messageRecu.toInt();
-      
-      // Sécurité : on vérifie que la conversion a donné un angle valide
+    // Découpage du message reçu autour de la virgule
+    int indexVirgule = messageRecu.indexOf(',');
+    if (indexVirgule != -1) {
+      String angleStr = messageRecu.substring(0, indexVirgule);
+      String digitalStr = messageRecu.substring(indexVirgule + 1);
+
+      int angleCible = angleStr.toInt();
+      int etatFlamme = digitalStr.toInt();
+
+      // Synchronisation du servomoteur local
       if (angleCible >= 0 && angleCible <= 180) {
-        Serial.print("Alerte reçu ! Alignement du servo sur l'angle : ");
-        Serial.println(angleCible);
-        
         servoRecepteur.write(angleCible);
+        angleCourant = angleCible; 
+      }
+
+      // Action immédiate si une flamme est détectée (KY-026 passe à LOW)
+      if (etatFlamme == LOW) {
+        afficherHorodatage();
+        Serial.print(" Moteurs synchronisés à l'angle : ");
+        Serial.print(angleCourant);
+        Serial.println("° - Feu Détecté !");
       }
     }
   }
+
+  // Affichage du statut global "RAS" toutes les 20 secondes
+  if (millis() - dernierRefresh >= intervalleRefresh) {
+    afficherHorodatage();
+    Serial.print(" Moteurs synchronisés à l'angle : ");
+    Serial.print(angleCourant);
+    Serial.println("° - RAS");
+    
+    dernierRefresh = millis();
+  }
+}
+
+// Fonction générant l'horodatage relatif (Uptime de la carte)
+void afficherHorodatage() {
+  unsigned long totalSecondes = millis() / 1000;
+  unsigned long s = totalSecondes % 60;
+  unsigned long m = (totalSecondes / 60) % 60;
+  unsigned long h = (totalSecondes / 3600);
+
+  Serial.print("[");
+  if (h < 10) Serial.print("0");
+  Serial.print(h);
+  Serial.print(":");
+  if (m < 10) Serial.print("0");
+  Serial.print(m);
+  Serial.print(":");
+  if (s < 10) Serial.print("0");
+  Serial.print(s);
+  Serial.print("]");
 }
