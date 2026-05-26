@@ -1,47 +1,67 @@
 #include <SPI.h>
 #include <LoRa.h>
+#include <Servo.h>
 
-// Définition des broches internes de la carte UCA
-const int csPin = 10;      // Chip select (NSS)
-const int resetPin = 8;    // Reset (RST)
-const int irqPin = 6;      // Interruption (DIO0)
+Servo myservo;
 
-int counter = 0; // Un compteur pour numéroter les messages
+// Broches LoRa pour la carte UCA21
+const int csPin = 10;
+const int resetPin = 8;
+const int irqPin = 6;
+
+// Variables pour la simulation des 30 secondes
+unsigned long dernierTempsDetection = 0;
+const unsigned long intervalleDetection = 30000; // 30 000 millisecondes = 30 secondes
 
 void setup() {
   Serial.begin(115200);
-  while (!Serial); // Attend l'ouverture du moniteur série
+  while (!Serial);
 
-  Serial.println("Démarrage de l'émetteur LoRa UCA...");
+  myservo.attach(A2);
 
-  // On indique à la bibliothèque quelles broches utiliser
+  // Initialisation LoRa
   LoRa.setPins(csPin, resetPin, irqPin);
-
-  // Initialisation de la fréquence radio à 868 MHz (Fréquence légale en Europe)
   if (!LoRa.begin(868E6)) {
-    Serial.println("Erreur : Le module LoRa n'a pas pu démarrer.");
-    Serial.println("Vérifie le type de carte sélectionné dans l'IDE.");
-    while (1); // Bloque le programme ici s'il y a une erreur
+    Serial.println("Échec LoRa sur l'émetteur !");
+    while (1);
   }
-  
-  // Optionnel : Régler la puissance d'émission (de 2 à 20, 14 est un bon défaut)
-  LoRa.setTxPower(14);
-  
-  Serial.println("Module LoRa initialisé avec succès !");
+  Serial.println("Émetteur prêt. Balayage en cours...");
 }
 
 void loop() {
-  Serial.print("Envoi du paquet : ");
-  Serial.println(counter);
-
-  // Début de la création du paquet radio
-  LoRa.beginPacket();
-  LoRa.print("Hello UCA numéro ");
-  LoRa.print(counter);
-  LoRa.endPacket(); // Envoi effectif du paquet
-
-  counter++;
+  // Balayage aller
+  for (int i = 0; i <= 180; i = i + 5) {
+    myservo.write(i);
+    delay(100);
+    verifierDetection(i); // On vérifie à chaque petit pas
+  }
   
-  // Attendre 5 secondes avant le prochain envoi
-  delay(5000);
+  // Balayage retour
+  for (int i = 180; i >= 0; i = i - 5) {
+    myservo.write(i);
+    delay(100);
+    verifierDetection(i); // On vérifie à chaque petit pas
+  }
+}
+
+// Fonction qui gère la détection et l'envoi
+void verifierDetection(int angleActuel) {
+  // Pour utiliser le vrai capteur KY-026 plus tard, tu remplaceras la ligne ci-dessous par :
+  // if (digitalRead(brocheCapteur) == HIGH) {
+  if (millis() - dernierTempsDetection >= intervalleDetection) {
+    
+    Serial.print("Détection simulée ! Angle figé à : ");
+    Serial.println(angleActuel);
+
+    // 1. Envoyer l'angle à la deuxième carte via LoRa
+    LoRa.beginPacket();
+    LoRa.print(angleActuel);
+    LoRa.endPacket();
+
+    // 2. Arrêter le servomoteur pendant 1 seconde
+    delay(1000);
+
+    // 3. Réinitialiser le chronomètre pour la prochaine simulation
+    dernierTempsDetection = millis();
+  }
 }
