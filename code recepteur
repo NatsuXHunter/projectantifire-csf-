@@ -1,0 +1,40 @@
+#include <SPI.h>
+#include <LoRa.h>
+
+const int csPin = 10;      
+const int resetPin = 8;    
+const int irqPin = 6;      
+
+void setup() {
+  Serial.begin(115200);
+  while (!Serial);
+
+  Serial.println("Démarrage du récepteur LoRa UCA...");
+
+  LoRa.setPins(csPin, resetPin, irqPin);
+
+  if (!LoRa.begin(868E6)) {
+    Serial.println("Erreur d'initialisation !");
+    while (1);
+  }
+  Serial.println("En attente de messages...");
+}
+
+void loop() {
+  // On vérifie si un paquet radio est arrivé
+  int packetSize = LoRa.parsePacket();
+  
+  if (packetSize) {
+    // Un paquet a été reçu !
+    Serial.print("Message reçu : '");
+
+    // On lit le message caractère par caractère
+    while (LoRa.available()) {
+      Serial.print((char)LoRa.read());
+    }
+    
+    // On affiche la puissance du signal (RSSI). Plus il est proche de 0, meilleur c'est.
+    Serial.print("' avec un signal (RSSI) de ");
+    Serial.println(LoRa.packetRssi());
+  }
+}
