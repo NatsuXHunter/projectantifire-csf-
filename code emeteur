@@ -4,17 +4,19 @@
 
 Servo myservo;
 
-// Broches matérielles LoRa de la carte UCA21
 const int csPin = 10;
 const int resetPin = 8;
 const int irqPin = 6;
 
-// Broches du capteur de flamme KY-026
 const int pinDigital = 3; 
 const int pinAnalog = A3; 
 
 unsigned long dernierTempsMouvement = 0;
-const unsigned long intervalleMouvement = 100; // Cadence du mouvement et de l'envoi
+const unsigned long intervalleMouvement = 100; 
+
+unsigned long dernierTempsLoRaRefresh = 0;
+const unsigned long intervalleLoRaRefresh = 20000; // 20 secondes pour le RAS
+
 int angle = 0;
 int direction = 5; 
 
@@ -27,38 +29,47 @@ void setup() {
 
   LoRa.setPins(csPin, resetPin, irqPin);
   if (!LoRa.begin(868E6)) {
-    Serial.println("Échec de l'initialisation LoRa !");
+    Serial.println("Échec LoRa !");
     while (1);
   }
-  Serial.println("Émetteur actif. Affichage des données capteur :");
+  Serial.println("Émetteur prêt.");
 }
 
 void loop() {
-  // Lecture continue des valeurs du capteur
   int valDigital = digitalRead(pinDigital);
   int valAnalog = analogRead(pinAnalog);
 
-  // Affichage PERMANENT dans le moniteur série de l'émetteur
-  Serial.print("Analogique: "); Serial.print(valAnalog);
-  Serial.print(" | Numérique: "); Serial.print(valDigital);
-  Serial.print(" | Angle Servo: "); Serial.println(angle);
-
-  // Gestion du déplacement du servo et envoi des données par LoRa
+  // 1. Affichage PERMANENT sur le moniteur série local de l'émetteur
   if (millis() - dernierTempsMouvement >= intervalleMouvement) {
+    Serial.print("Analogique: "); Serial.print(valAnalog);
+    Serial.print(" | Numérique: "); Serial.print(valDigital);
+    Serial.print(" | Angle Servo: "); Serial.println(angle);
+
     myservo.write(angle);
     
-    // Construction et envoi du paquet (Format : "angle,valDigital")
-    LoRa.beginPacket();
-    LoRa.print(angle);
-    LoRa.print(",");
-    LoRa.print(valDigital);
-    LoRa.endPacket();
+    // 2. ENVOI LORA IMMÉDIAT SI FLAMME DÉTECTÉE (valDigital tombe à 0)
+    if (valDigital == LOW) {
+      LoRa.beginPacket();
+      LoRa.print("FEU,");
+      LoRa.print(angle);
+      LoRa.endPacket();
+      delay(500); // Anti-rebond pour ne pas saturer la radio pendant le feu
+    }
 
-    // Calcul de la prochaine position
     angle += direction;
     if (angle >= 180 || angle <= 0) {
       direction = -direction; 
     }
     dernierTempsMouvement = millis();
+  }
+
+  // 3. ENVOI LORA TOUTES LES 20 SECONDES (RAS)
+  if (millis() - dernierTempsLoRaRefresh >= intervalleLoRaRefresh) {
+    LoRa.beginPacket();
+    LoRa.print("RAS,");
+    LoRa.print(angle);
+    LoRa.endPacket();
+    
+    dernierTempsLoRaRefresh = millis();
   }
 }
