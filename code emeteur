@@ -4,86 +4,57 @@
 
 Servo myservo;
 
-// Broches LoRa pour UCA21
+// Broches matérielles LoRa de la carte UCA21
 const int csPin = 10;
 const int resetPin = 8;
 const int irqPin = 6;
 
-// Broche du capteur de flamme
-const int pinCapteur = 3; 
+// Broches du capteur de flamme KY-026
+const int pinDigital = 3; 
+const int pinAnalog = A3; 
 
-// Chronomètre pour le rafraîchissement toutes les 30 secondes
-unsigned long dernierRefresh = 0;
-const unsigned long intervalleRefresh = 30000;
-
-// Variables pour le mouvement du servo (sans delay)
 unsigned long dernierTempsMouvement = 0;
-const unsigned long intervalleMouvement = 100; 
+const unsigned long intervalleMouvement = 100; // Cadence du mouvement et de l'envoi
 int angle = 0;
 int direction = 5; 
-
-// Variables pour la pause de 1 seconde suite à une détection
-unsigned long debutPause = 0;
-bool enPause = false;
 
 void setup() {
   Serial.begin(115200);
   while (!Serial);
 
   myservo.attach(A2);
-  pinMode(pinCapteur, INPUT); // Configuration de la broche du capteur
+  pinMode(pinDigital, INPUT);
 
-  // Initialisation LoRa
   LoRa.setPins(csPin, resetPin, irqPin);
   if (!LoRa.begin(868E6)) {
-    Serial.println("Échec LoRa sur l'émetteur !");
+    Serial.println("Échec de l'initialisation LoRa !");
     while (1);
   }
-  Serial.println("Système réel prêt. Surveillance active...");
-  dernierRefresh = millis(); // Initialisation du chrono
+  Serial.println("Émetteur actif. Affichage des données capteur :");
 }
 
 void loop() {
-  // 1. GESTION DE LA PAUSE DE 1 SECONDE APRÈS DÉTECTION
-  if (enPause) {
-    if (millis() - debutPause >= 1000) {
-      enPause = false; 
-      dernierRefresh = millis(); // On décale le refresh pour éviter qu'il pop direct après la pause
-    }
-    return; // On bloque le reste de la boucle pendant la pause
-  }
+  // Lecture continue des valeurs du capteur
+  int valDigital = digitalRead(pinDigital);
+  int valAnalog = analogRead(pinAnalog);
 
-  // 2. SURVEILLANCE RÉELLE DU CAPTEUR (Tourne en continu sans blocage)
-  // Si le capteur détecte une flamme, sa sortie DO passe à LOW
-  if (digitalRead(pinCapteur) == LOW) {
-    Serial.print("FLAMME DÉTECTÉE ! Angle envoyé : ");
-    Serial.println(angle);
+  // Affichage PERMANENT dans le moniteur série de l'émetteur
+  Serial.print("Analogique: "); Serial.print(valAnalog);
+  Serial.print(" | Numérique: "); Serial.print(valDigital);
+  Serial.print(" | Angle Servo: "); Serial.println(angle);
 
-    // Envoi immédiat de l'angle par LoRa
-    LoRa.beginPacket();
-    LoRa.print(angle); 
-    LoRa.endPacket();
-
-    // Déclenchement de la pause d'une seconde
-    enPause = true;
-    debutPause = millis();
-    return;
-  }
-
-  // 3. ENVOI DU REFRESH TOUTES LES 30 SECONDES (Si pas de flamme)
-  if (millis() - dernierRefresh >= intervalleRefresh) {
-    Serial.println("Envoi refresh : RAS ça marche");
-    
-    LoRa.beginPacket();
-    LoRa.print("RAS ça marche"); // Envoi du texte de statut
-    LoRa.endPacket();
-
-    dernierRefresh = millis();
-  }
-
-  // 4. BALAYAGE DU SERVOMOTEUR
+  // Gestion du déplacement du servo et envoi des données par LoRa
   if (millis() - dernierTempsMouvement >= intervalleMouvement) {
     myservo.write(angle);
+    
+    // Construction et envoi du paquet (Format : "angle,valDigital")
+    LoRa.beginPacket();
+    LoRa.print(angle);
+    LoRa.print(",");
+    LoRa.print(valDigital);
+    LoRa.endPacket();
+
+    // Calcul de la prochaine position
     angle += direction;
     if (angle >= 180 || angle <= 0) {
       direction = -direction; 
