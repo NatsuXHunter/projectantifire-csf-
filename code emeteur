@@ -4,20 +4,34 @@
 
 Servo myservo;
 
-// Broches LoRa pour la carte UCA21
+// Broches LoRa pour UCA21
 const int csPin = 10;
 const int resetPin = 8;
 const int irqPin = 6;
 
-// Variables pour la simulation des 30 secondes
-unsigned long dernierTempsDetection = 0;
-const unsigned long intervalleDetection = 30000; // 30 000 millisecondes = 30 secondes
+// Broche du capteur de flamme
+const int pinCapteur = 3; 
+
+// Chronomètre pour le rafraîchissement toutes les 30 secondes
+unsigned long dernierRefresh = 0;
+const unsigned long intervalleRefresh = 30000;
+
+// Variables pour le mouvement du servo (sans delay)
+unsigned long dernierTempsMouvement = 0;
+const unsigned long intervalleMouvement = 100; 
+int angle = 0;
+int direction = 5; 
+
+// Variables pour la pause de 1 seconde suite à une détection
+unsigned long debutPause = 0;
+bool enPause = false;
 
 void setup() {
   Serial.begin(115200);
   while (!Serial);
 
   myservo.attach(A2);
+  pinMode(pinCapteur, INPUT); // Configuration de la broche du capteur
 
   // Initialisation LoRa
   LoRa.setPins(csPin, resetPin, irqPin);
@@ -25,43 +39,55 @@ void setup() {
     Serial.println("Échec LoRa sur l'émetteur !");
     while (1);
   }
-  Serial.println("Émetteur prêt. Balayage en cours...");
+  Serial.println("Système réel prêt. Surveillance active...");
+  dernierRefresh = millis(); // Initialisation du chrono
 }
 
 void loop() {
-  // Balayage aller
-  for (int i = 0; i <= 180; i = i + 5) {
-    myservo.write(i);
-    delay(100);
-    verifierDetection(i); // On vérifie à chaque petit pas
+  // 1. GESTION DE LA PAUSE DE 1 SECONDE APRÈS DÉTECTION
+  if (enPause) {
+    if (millis() - debutPause >= 1000) {
+      enPause = false; 
+      dernierRefresh = millis(); // On décale le refresh pour éviter qu'il pop direct après la pause
+    }
+    return; // On bloque le reste de la boucle pendant la pause
   }
-  
-  // Balayage retour
-  for (int i = 180; i >= 0; i = i - 5) {
-    myservo.write(i);
-    delay(100);
-    verifierDetection(i); // On vérifie à chaque petit pas
-  }
-}
 
-// Fonction qui gère la détection et l'envoi
-void verifierDetection(int angleActuel) {
-  // Pour utiliser le vrai capteur KY-026 plus tard, tu remplaceras la ligne ci-dessous par :
-  // if (digitalRead(brocheCapteur) == HIGH) {
-  if (millis() - dernierTempsDetection >= intervalleDetection) {
-    
-    Serial.print("Détection simulée ! Angle figé à : ");
-    Serial.println(angleActuel);
+  // 2. SURVEILLANCE RÉELLE DU CAPTEUR (Tourne en continu sans blocage)
+  // Si le capteur détecte une flamme, sa sortie DO passe à LOW
+  if (digitalRead(pinCapteur) == LOW) {
+    Serial.print("FLAMME DÉTECTÉE ! Angle envoyé : ");
+    Serial.println(angle);
 
-    // 1. Envoyer l'angle à la deuxième carte via LoRa
+    // Envoi immédiat de l'angle par LoRa
     LoRa.beginPacket();
-    LoRa.print(angleActuel);
+    LoRa.print(angle); 
     LoRa.endPacket();
 
-    // 2. Arrêter le servomoteur pendant 1 seconde
-    delay(1000);
+    // Déclenchement de la pause d'une seconde
+    enPause = true;
+    debutPause = millis();
+    return;
+  }
 
-    // 3. Réinitialiser le chronomètre pour la prochaine simulation
-    dernierTempsDetection = millis();
+  // 3. ENVOI DU REFRESH TOUTES LES 30 SECONDES (Si pas de flamme)
+  if (millis() - dernierRefresh >= intervalleRefresh) {
+    Serial.println("Envoi refresh : RAS ça marche");
+    
+    LoRa.beginPacket();
+    LoRa.print("RAS ça marche"); // Envoi du texte de statut
+    LoRa.endPacket();
+
+    dernierRefresh = millis();
+  }
+
+  // 4. BALAYAGE DU SERVOMOTEUR
+  if (millis() - dernierTempsMouvement >= intervalleMouvement) {
+    myservo.write(angle);
+    angle += direction;
+    if (angle >= 180 || angle <= 0) {
+      direction = -direction; 
+    }
+    dernierTempsMouvement = millis();
   }
 }
