@@ -1,0 +1,47 @@
+#include <SPI.h>
+#include <LoRa.h>
+
+// Définition des broches internes de la carte UCA
+const int csPin = 10;      // Chip select (NSS)
+const int resetPin = 8;    // Reset (RST)
+const int irqPin = 6;      // Interruption (DIO0)
+
+int counter = 0; // Un compteur pour numéroter les messages
+
+void setup() {
+  Serial.begin(115200);
+  while (!Serial); // Attend l'ouverture du moniteur série
+
+  Serial.println("Démarrage de l'émetteur LoRa UCA...");
+
+  // On indique à la bibliothèque quelles broches utiliser
+  LoRa.setPins(csPin, resetPin, irqPin);
+
+  // Initialisation de la fréquence radio à 868 MHz (Fréquence légale en Europe)
+  if (!LoRa.begin(868E6)) {
+    Serial.println("Erreur : Le module LoRa n'a pas pu démarrer.");
+    Serial.println("Vérifie le type de carte sélectionné dans l'IDE.");
+    while (1); // Bloque le programme ici s'il y a une erreur
+  }
+  
+  // Optionnel : Régler la puissance d'émission (de 2 à 20, 14 est un bon défaut)
+  LoRa.setTxPower(14);
+  
+  Serial.println("Module LoRa initialisé avec succès !");
+}
+
+void loop() {
+  Serial.print("Envoi du paquet : ");
+  Serial.println(counter);
+
+  // Début de la création du paquet radio
+  LoRa.beginPacket();
+  LoRa.print("Hello UCA numéro ");
+  LoRa.print(counter);
+  LoRa.endPacket(); // Envoi effectif du paquet
+
+  counter++;
+  
+  // Attendre 5 secondes avant le prochain envoi
+  delay(5000);
+}
