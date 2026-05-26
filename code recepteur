@@ -1,40 +1,48 @@
 #include <SPI.h>
 #include <LoRa.h>
+#include <Servo.h>
 
-const int csPin = 10;      
-const int resetPin = 8;    
-const int irqPin = 6;      
+Servo servoRecepteur;
+
+// Broches LoRa pour la carte UCA21
+const int csPin = 10;
+const int resetPin = 8;
+const int irqPin = 6;
 
 void setup() {
   Serial.begin(115200);
   while (!Serial);
 
-  Serial.println("Démarrage du récepteur LoRa UCA...");
+  servoRecepteur.attach(A2); // Branche ton 2ème servo sur A2 (et V_bus / GND)
 
+  // Initialisation LoRa
   LoRa.setPins(csPin, resetPin, irqPin);
-
   if (!LoRa.begin(868E6)) {
-    Serial.println("Erreur d'initialisation !");
+    Serial.println("Échec LoRa sur le récepteur !");
     while (1);
   }
-  Serial.println("En attente de messages...");
+  Serial.println("Récepteur prêt. En attente d'une détection...");
 }
 
 void loop() {
-  // On vérifie si un paquet radio est arrivé
+  // On vérifie si un paquet LoRa est arrivé
   int packetSize = LoRa.parsePacket();
   
   if (packetSize) {
-    // Un paquet a été reçu !
-    Serial.print("Message reçu : '");
-
-    // On lit le message caractère par caractère
-    while (LoRa.available()) {
-      Serial.print((char)LoRa.read());
-    }
+    String messageRecu = "";
     
-    // On affiche la puissance du signal (RSSI). Plus il est proche de 0, meilleur c'est.
-    Serial.print("' avec un signal (RSSI) de ");
-    Serial.println(LoRa.packetRssi());
+    // On lit le message caractère par caractère pour reconstituer l'angle
+    while (LoRa.available()) {
+      messageRecu += (char)LoRa.read();
+    }
+
+    // On convertit le texte reçu en nombre entier (int)
+    int angleCible = messageRecu.toInt();
+    
+    Serial.print("Détection signalée par l'émetteur ! Calibrage à l'angle : ");
+    Serial.println(angleCible);
+
+    // On positionne le servomoteur au même endroit
+    servoRecepteur.write(angleCible);
   }
 }
