@@ -8,8 +8,8 @@ const int csPin = 10;
 const int resetPin = 8;
 const int irqPin = 6;
 
-const int pinDigital = 3; 
-const int pinAnalog = A3; 
+const int pinDigital = 5; 
+const int pinAnalog = A0; 
 
 // Chrono du moteur (Balayage continu)
 unsigned long dernierTempsMouvement = 0;
