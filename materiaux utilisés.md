@@ -1,4 +1,4 @@
-Comme carte électronique pour communiquer les différents éléments du projet, nous utilisons la carte UCA fournit par l'université côté d'azur. (Un ESP32 devrait suffire pour réaliser ce projet)
+Comme carte électronique pour communiquer les différents éléments du projet, nous utilisons la carte UCA fournit par l'université côté d'azur. (Un ESP32 devrait suffire pour réaliser ce projet). Nous en utilisons 2 pour communiquer les données en LoRa (une éméteuse et une receveuse )
 
 Voici le lien pour parametrer la carte UCA sur arduino ide:
 https://github.com/FabienFerrero/UCA21
